@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MindBend - 3D Card Magic</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a1a;
+    font-family: 'Georgia', serif;
+    color: #f5e8c7;
+  }
+  #app {
+    position: absolute;
+    inset: 0;
+  }
+  #ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 14px 20px;
+    background: linear-gradient(to bottom, rgba(10, 10, 26, 0.85), rgba(10, 10, 26, 0));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 10;
+    user-select: none;
+  }
+  #ui h1 {
+    margin: 0 18px 0 0;
+    font-size: 22px;
+    letter-spacing: 0.18em;
+    color: #e8c970;
+    text-shadow: 0 0 12px rgba(232, 201, 112, 0.4);
+  }
+  button {
+    background: rgba(20, 20, 50, 0.7);
+    color: #f5e8c7;
+    border: 1px solid #e8c970;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-family: 'Georgia', serif;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  button:hover {
+    background: rgba(60, 50, 100, 0.85);
+    transform: translateY(-1px);
+  }
+  button:active {
+    transform: translateY(0);
+  }
+  button:focus-visible {
+    outline: 2px solid #e8c970;
+    outline-offset: 2px;
+  }
+  #info {
+    margin-left: auto;
+    font-size: 12px;
+    color: #a8a8c0;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.05em;
+  }
+  #hint {
+    position: absolute;
+    bottom: 18px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 12px;
+    color: #6a6a8a;
+    pointer-events: none;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <h1>MindBend</h1>
+  <button id="btn-deal" aria-label="Deal cards in a fan">Deal</button>
+  <button id="btn-shuffle" aria-label="Shuffle cards back to a stack">Shuffle</button>
+  <button id="btn-reveal" aria-label="Reveal the selected card">Reveal</button>
+  <div id="info">Cards: 52 | Memory: 0 textures</div>
+</div>
+<div id="hint">Click a card to flip it, then press Reveal.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// =============================================================
+// MindBend - 3D Card Magic / Mentalism Demo
+// Single-file Three.js scene with 52 interactive playing cards.
+// =============================================================
+
+(function () {
+  'use strict';
+
+  // -----------------------------------------------------------
+  // Constants
+  // -----------------------------------------------------------
+  const SUITS = ['♠', '♥', '♦', '♣']; // spades, hearts, diamonds, clubs
+  const SUIT_NAMES = ['spades', 'hearts', 'diamonds', 'clubs'];
+  const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const CARD_W = 0.63;
+  const CARD_H = 1.0;
+  const FAN_RADIUS = 6.5;
+  const FAN_ARC = Math.PI * 0.85; // ~153 degrees of fanning
+  const SHUFFLE_DELAY_MS = 30;
+
+  // -----------------------------------------------------------
+  // Scene, camera, renderer
+  // -----------------------------------------------------------
+  const container = document.getElementById('app');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a1a);
+
+  const camera = new THREE.PerspectiveCamera(
+    50,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100
+  );
+  camera.position.set(0, 0, 12);
+  camera.lookAt(0, 0, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  container.appendChild(renderer.domElement);
+
+  // -----------------------------------------------------------
+  // OrbitControls
+  // -----------------------------------------------------------
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 5;
+  controls.maxDistance = 25;
+  controls.enablePan = false;
+
+  // -----------------------------------------------------------
+  // Lighting
+  // -----------------------------------------------------------
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+
+  const dirLight = new THREE.DirectionalLight(0xffe8b0, 0.9);
+  dirLight.position.set(8, 10, 6);
+  scene.add(dirLight);
+
+  const bluePoint = new THREE.PointLight(0x4060ff, 0.6, 25);
+  bluePoint.position.set(0, -6, 4);
+  scene.add(bluePoint);
+
+  // -----------------------------------------------------------
+  // Card texture creation (Canvas -> CanvasTexture)
+  // -----------------------------------------------------------
+  function makeFrontCanvas(rank, suit) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 384;
+    const ctx = canvas.getContext('2d');
+
+    // White card body with subtle ivory tint
+    ctx.fillStyle = '#fdfaf0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Inner border
+    ctx.strokeStyle = '#c0b090';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+
+    const isRed = (suit === '♥' || suit === '♦');
+    ctx.fillStyle = isRed ? '#c91f1f' : '#1a1a1a';
+
+    // Top-left rank + small suit
+    ctx.font = 'bold 48px Georgia';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(rank, 18, 18);
+    ctx.font = '36px Georgia';
+    ctx.fillText(suit, 22, 68);
+
+    // Center large suit symbol
+    ctx.font = '160px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(suit, canvas.width / 2, canvas.height / 2);
+
+    // Bottom-right rank + small suit (rotated 180)
+    ctx.save();
+    ctx.translate(canvas.width - 18, canvas.height - 18);
+    ctx.rotate(Math.PI);
+    ctx.font = 'bold 48px Georgia';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(rank, 0, 0);
+    ctx.font = '36px Georgia';
+    ctx.fillText(suit, 4, 50);
+    ctx.restore();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  // Single shared back texture (diamond lattice pattern)
+  function makeBackCanvas() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 384;
+    const ctx = canvas.getContext('2d');
+
+    // Deep navy base
+    ctx.fillStyle = '#0c1c4a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Gold border
+    ctx.strokeStyle = '#e8c970';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    // Diamond lattice
+    ctx.strokeStyle = 'rgba(232, 201, 112, 0.55)';
+    ctx.lineWidth = 1.2;
+    const step = 18;
+    for (let y = -canvas.height; y < canvas.height * 2; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(-10, y);
+      ctx.lineTo(canvas.width + 10, y + canvas.width + 20);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(canvas.width + 10, y);
+      ctx.lineTo(-10, y + canvas.width + 20);
+      ctx.stroke();
+    }
+
+    // Center medallion
+    ctx.fillStyle = 'rgba(232, 201, 112, 0.85)';
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0c1c4a';
+    ctx.font = 'bold 30px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('M', canvas.width / 2, canvas.height / 2 + 2);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  const backTexture = makeBackCanvas();
+
+  // -----------------------------------------------------------
+  // Card creation - 52 PlaneGeometry meshes
+  // Each card is a thin "double-sided" object built from two
+  // back-to-back planes so we can have different front/back textures.
+  // -----------------------------------------------------------
+  const cardMeshes = [];
+  const cardGeometry = new THREE.PlaneGeometry(CARD_W, CARD_H);
+
+  function createCard(rank, suit, index) {
+    const group = new THREE.Group();
+    const frontTex = makeFrontCanvas(rank, suit);
+
+    const frontMat = new THREE.MeshStandardMaterial({
+      map: frontTex,
+      side: THREE.FrontSide,
+      roughness: 0.6,
+      metalness: 0.05,
+    });
+    const backMat = new THREE.MeshStandardMaterial({
+      map: backTexture,
+      side: THREE.FrontSide,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+
+    const front = new THREE.Mesh(cardGeometry, frontMat);
+    front.position.z = 0.005;
+
+    const back = new THREE.Mesh(cardGeometry, backMat);
+    back.rotation.y = Math.PI;
+    back.position.z = -0.005;
+
+    group.add(front);
+    group.add(back);
+
+    group.userData = {
+      rank,
+      suit,
+      suitName: SUIT_NAMES[SUITS.indexOf(suit)],
+      index,
+      isFaceUp: false,
+      // Animation targets
+      targetPos: new THREE.Vector3(0, 0, index * 0.002),
+      targetRot: new THREE.Euler(0, Math.PI, 0), // start showing back (rotated 180 around Y)
+      targetScale: 1.0,
+      // Per-card state
+      flipping: false,
+      flipFrom: 0,
+      flipTo: 0,
+      flipT: 0,
+      flipDuration: 0.5,
+      lerpSpeed: 4.5,
+      // Reference to materials for disposal
+      frontMaterial: frontMat,
+      backMaterial: backMat,
+    };
+
+    // Start stacked at origin, face-down
+    group.position.set(0, 0, index * 0.002);
+    group.rotation.set(0, Math.PI, 0);
+
+    return group;
+  }
+
+  function buildDeck() {
+    let i = 0;
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
+        const card = createCard(rank, suit, i);
+        scene.add(card);
+        cardMeshes.push(card);
+        i++;
+      }
+    }
+  }
+  buildDeck();
+
+  // -----------------------------------------------------------
+  // Deal animation - cards fan out in a 3D semicircle arc
+  // -----------------------------------------------------------
+  function dealCards() {
+    const n = cardMeshes.length;
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const angle = (t - 0.5) * FAN_ARC; // -arc/2 .. +arc/2
+      // Arc lying mostly on x/y plane, slightly curving toward camera
+      const x = Math.sin(angle) * FAN_RADIUS;
+      const y = -Math.cos(angle) * 1.2 + 1.5; // gentle smile shape
+      const z = Math.cos(angle) * 0.8;        // closer in middle
+      const card = cardMeshes[i];
+      card.userData.targetPos.set(x, y, z);
+      // Cards face camera but tilt outward following the arc;
+      // keep face-down (Y rotation = PI) unless explicitly flipped.
+      const baseY = card.userData.isFaceUp ? 0 : Math.PI;
+      card.userData.targetRot.set(angle * 0.15, baseY + angle * 0.4, -angle * 0.6);
+      card.userData.targetScale = 1.0;
+    }
+  }
+
+  // -----------------------------------------------------------
+  // Shuffle animation - cards cascade back to stack
+  // -----------------------------------------------------------
+  function shuffleCards() {
+    // Randomize the order in which cards return so it looks shuffled.
+    const order = cardMeshes.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+
+    order.forEach((cardIdx, sequencePos) => {
+      const card = cardMeshes[cardIdx];
+      setTimeout(() => {
+        card.userData.targetPos.set(0, 0, sequencePos * 0.002);
+        card.userData.targetRot.set(0, Math.PI, 0);
+        card.userData.targetScale = 1.0;
+        // Flip face-down on shuffle
+        if (card.userData.isFaceUp) {
+          startFlip(card, false);
+        }
+      }, sequencePos * SHUFFLE_DELAY_MS);
+    });
+
+    // Clear selection
+    selectedCard = null;
+  }
+
+  // -----------------------------------------------------------
+  // Card flip - tween Y rotation by 180 degrees
+  // -----------------------------------------------------------
+  function startFlip(card, faceUp) {
+    const u = card.userData;
+    if (u.flipping) return;
+    u.flipping = true;
+    u.flipT = 0;
+    u.flipFrom = u.isFaceUp ? 0 : Math.PI;
+    u.flipTo = faceUp ? 0 : Math.PI;
+    u.isFaceUp = faceUp;
+    // Sync targetRot Y so post-flip lerp converges
+    u.targetRot.y = u.flipTo;
+  }
+
+  function toggleFlip(card) {
+    startFlip(card, !card.userData.isFaceUp);
+  }
+
+  // -----------------------------------------------------------
+  // Reveal animation - selected card flies to center, scales up,
+  // and emits a particle burst.
+  // -----------------------------------------------------------
+  let selectedCard = null;
+  let particles = [];
+
+  function revealSelected() {
+    if (!selectedCard) {
+      flashHint('Click a card first.');
+      return;
+    }
+    const card = selectedCard;
+    card.userData.targetPos.set(0, 0, 6);
+    card.userData.targetRot.set(0, 0, 0);
+    card.userData.targetScale = 1.5;
+    if (!card.userData.isFaceUp) {
+      startFlip(card, true);
+    }
+    spawnParticles(card.position.clone());
+  }
+
+  function spawnParticles(origin) {
+    const count = 60;
+    const geo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+    for (let i = 0; i < count; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(0.12 + Math.random() * 0.08, 0.9, 0.6),
+        emissive: 0x402000,
+        roughness: 0.4,
+      });
+      const p = new THREE.Mesh(geo, mat);
+      p.position.copy(origin);
+      const theta = Math.random() * Math.PI * 2;
+      const phi = (Math.random() - 0.5) * Math.PI;
+      const speed = 2 + Math.random() * 4;
+      p.userData = {
+        velocity: new THREE.Vector3(
+          Math.cos(theta) * Math.cos(phi) * speed,
+          Math.sin(phi) * speed + 1.5,
+          Math.sin(theta) * Math.cos(phi) * speed
+        ),
+        life: 1.2 + Math.random() * 0.6,
+        age: 0,
+        geometry: geo,
+        material: mat,
+      };
+      scene.add(p);
+      particles.push(p);
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.userData.age += dt;
+      if (p.userData.age >= p.userData.life) {
+        scene.remove(p);
+        // Dispose this particle's resources
+        if (p.userData.material) p.userData.material.dispose();
+        // Note: geometry is shared per-burst spawn; safe to dispose at end of life
+        if (p.userData.geometry) p.userData.geometry.dispose();
+        particles.splice(i, 1);
+        continue;
+      }
+      p.userData.velocity.y -= 4.0 * dt; // gravity
+      p.position.addScaledVector(p.userData.velocity, dt);
+      p.rotation.x += dt * 6;
+      p.rotation.y += dt * 4;
+      const lifeT = p.userData.age / p.userData.life;
+      p.scale.setScalar(1 - lifeT);
+    }
+  }
+
+  // -----------------------------------------------------------
+  // Raycasting - click detection
+  // Uses clientX/clientY and window.innerWidth/Height for NDC.
+  // -----------------------------------------------------------
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  function onPointerDown(event) {
+    // Normalized device coords from clientX/clientY + window size
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    // Collect every front/back mesh inside every card group
+    const meshes = [];
+    for (const card of cardMeshes) {
+      for (const child of card.children) meshes.push(child);
+    }
+    const hits = raycaster.intersectObjects(meshes, false);
+    if (hits.length === 0) return;
+
+    // Walk up to the parent group (the card itself)
+    let obj = hits[0].object;
+    while (obj && !obj.userData.rank) obj = obj.parent;
+    if (!obj) return;
+
+    selectedCard = obj;
+    toggleFlip(obj);
+  }
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+  // -----------------------------------------------------------
+  // UI bindings
+  // -----------------------------------------------------------
+  document.getElementById('btn-deal').addEventListener('click', dealCards);
+  document.getElementById('btn-shuffle').addEventListener('click', shuffleCards);
+  document.getElementById('btn-reveal').addEventListener('click', revealSelected);
+
+  const hintEl = document.getElementById('hint');
+  let hintTimer = 0;
+  function flashHint(msg) {
+    const original = 'Click a card to flip it, then press Reveal.';
+    hintEl.textContent = msg;
+    hintEl.style.color = '#e8c970';
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => {
+      hintEl.textContent = original;
+      hintEl.style.color = '#6a6a8a';
+    }, 1800);
+  }
+
+  // -----------------------------------------------------------
+  // Window resize handler - all three required updates
+  // -----------------------------------------------------------
+  function onResize() {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', onResize);
+
+  // -----------------------------------------------------------
+  // Animation loop - delta-time based
+  // -----------------------------------------------------------
+  const clock = new THREE.Clock();
+  const infoEl = document.getElementById('info');
+  let frameCount = 0;
+
+  function animate() {
+    const dt = Math.min(clock.getDelta(), 0.05); // clamp delta during tab switches
+    requestAnimationFrame(animate);
+
+    // Smoothly lerp every card toward its target pos / rot / scale
+    for (const card of cardMeshes) {
+      const u = card.userData;
+      const k = 1 - Math.exp(-u.lerpSpeed * dt); // frame-rate-independent lerp factor
+
+      card.position.lerp(u.targetPos, k);
+
+      // Handle active flip (overrides Y rotation tween)
+      if (u.flipping) {
+        u.flipT += dt / u.flipDuration;
+        if (u.flipT >= 1) {
+          u.flipT = 1;
+          u.flipping = false;
+        }
+        const ease = 0.5 - 0.5 * Math.cos(Math.PI * u.flipT); // smoothstep-ish
+        const yRot = u.flipFrom + (u.flipTo - u.flipFrom) * ease;
+        card.rotation.y = yRot;
+        // Lerp X and Z separately toward target
+        card.rotation.x += (u.targetRot.x - card.rotation.x) * k;
+        card.rotation.z += (u.targetRot.z - card.rotation.z) * k;
+      } else {
+        card.rotation.x += (u.targetRot.x - card.rotation.x) * k;
+        card.rotation.y += (u.targetRot.y - card.rotation.y) * k;
+        card.rotation.z += (u.targetRot.z - card.rotation.z) * k;
+      }
+
+      const ts = u.targetScale;
+      card.scale.x += (ts - card.scale.x) * k;
+      card.scale.y += (ts - card.scale.y) * k;
+      card.scale.z += (ts - card.scale.z) * k;
+    }
+
+    updateParticles(dt);
+    controls.update();
+    renderer.render(scene, camera);
+
+    // Update info line every ~10 frames for cheap stats refresh
+    frameCount++;
+    if (frameCount % 10 === 0) {
+      const tex = renderer.info.memory.textures;
+      infoEl.textContent = 'Cards: ' + cardMeshes.length + ' | Memory: ' + tex + ' textures';
+    }
+  }
+  animate();
+
+  // -----------------------------------------------------------
+  // Disposal helper - properly free resources for any card we
+  // remove from the scene (geometry, material, material.map).
+  // -----------------------------------------------------------
+  function disposeCard(card) {
+    scene.remove(card);
+    for (const child of card.children) {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (child.material.map) child.material.map.dispose();
+        child.material.dispose();
+      }
+    }
+  }
+
+  // -----------------------------------------------------------
+  // Exports for testability
+  // -----------------------------------------------------------
+  window.scene = scene;
+  window.camera = camera;
+  window.renderer = renderer;
+  window.cardMeshes = cardMeshes;
+  window.getRendererInfo = function () { return renderer.info; };
+  window.dealCards = dealCards;
+  window.shuffleCards = shuffleCards;
+  window.revealSelected = revealSelected;
+  window.disposeCard = disposeCard;
+})();
+</script>
+</body>
+</html>
