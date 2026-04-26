@@ -28,3 +28,10 @@ After `camera.aspect` is updated, `camera.updateProjectionMatrix()` propagates t
 ## Chain Note
 
 This issue shares a root cause with issues #16–20. Calling `camera.updateProjectionMatrix()` in `onResize` resolves all five.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "chain-projection" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

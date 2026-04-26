@@ -19,3 +19,10 @@ Cards animate to their target positions in ~0.3–0.8 seconds with a smooth ease
 ## Actual Behavior
 
 With `lerpSpeed=0.04`, cards take 2–5 seconds to reach their targets — the app feels unresponsive.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "lerp-speed" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

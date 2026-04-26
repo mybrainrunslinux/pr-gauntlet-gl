@@ -19,3 +19,10 @@ Card flip reveals the back face with its distinct texture/design.
 ## Actual Behavior
 
 The back face is invisible due to incorrect face culling direction.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "backside" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

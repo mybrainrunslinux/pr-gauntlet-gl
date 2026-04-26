@@ -19,3 +19,10 @@ Open `index.html` on a 144Hz display vs. a 60Hz display. Card deal/flip/hover an
 ## Actual Behavior
 
 `lerp(current, target, lerpSpeed)` — animation speed scales with frame rate.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "lerp-dt" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

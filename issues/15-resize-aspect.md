@@ -19,3 +19,10 @@ On resize: `camera.aspect = newWidth / newHeight; camera.updateProjectionMatrix(
 ## Actual Behavior
 
 Renderer dimensions update but camera projection does not — cards distort after any resize.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "resize-aspect" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

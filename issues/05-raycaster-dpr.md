@@ -19,3 +19,10 @@ Mouse NDC coordinates correctly map to the rendered pixel position regardless of
 ## Actual Behavior
 
 Click target is offset by a factor of DPR — selection is inaccurate on HiDPI displays.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "raycaster-dpr" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

@@ -19,3 +19,10 @@ Cards spread in a natural partial arc (roughly 100–120°), like a hand of play
 ## Actual Behavior
 
 Cards spread 360° — some are behind the camera, and the layout resembles a clock face not a hand.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "fan-arc" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

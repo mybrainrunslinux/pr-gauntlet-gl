@@ -19,3 +19,10 @@ Open `index.html` on a Retina/HiDPI display. Card faces and edges appear blurry 
 ## Actual Behavior
 
 Hardcoded to 1 — blurry on any display with DPR > 1.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "pixel-ratio" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

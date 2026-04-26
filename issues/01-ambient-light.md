@@ -19,3 +19,10 @@ Cards are visible under ambient illumination. The scene has a warm, atmospheric 
 ## Actual Behavior
 
 The canvas renders black — no light reaches any geometry.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "ambient-light" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

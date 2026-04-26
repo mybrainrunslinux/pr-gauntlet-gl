@@ -23,3 +23,10 @@ After resize, the stale projection matrix produces wrong perspective depth — c
 ## Chain Note
 
 This issue shares a root cause with issues #16–20. Fix the root once and all five resolve.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "chain-perspective" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

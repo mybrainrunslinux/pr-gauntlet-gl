@@ -19,3 +19,10 @@ Use browser DevTools → Memory → GPU to observe. Deal and discard cards repea
 ## Actual Behavior
 
 Only geometry and material objects are disposed; textures remain in GPU memory indefinitely.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "texture-dispose" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

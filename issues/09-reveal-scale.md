@@ -19,3 +19,10 @@ The reveal animation scales the card up (e.g., to `1.2×`) to emphasize the reve
 ## Actual Behavior
 
 Card scales down to `0.01×` — effectively disappears during reveal.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "reveal-scale" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

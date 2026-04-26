@@ -19,3 +19,10 @@ Cards spread evenly across the full fan arc, first card at one end, last card at
 ## Actual Behavior
 
 Cards are compressed — they don't spread to the full arc. Increasing card count makes overlap worse.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "deal-divisor" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.

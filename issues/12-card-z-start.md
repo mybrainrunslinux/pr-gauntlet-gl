@@ -19,3 +19,10 @@ All cards start at the same deck position (Z ≈ 0) and animate out to their fan
 ## Actual Behavior
 
 Cards initialize at `index * 2.0` Z offsets — they appear to fly in from different depths, breaking the illusion of a deck.
+
+## Steps to Fix
+
+1. Read `app/index.html` and understand the bug described above.
+2. Apply the minimal fix — only edit `app/index.html`.
+3. Validate: `npx playwright test scoring/test_issues.spec.js --grep "card-z-start" --config scoring/playwright.config.js`
+4. Confirm the test passes before submitting.
