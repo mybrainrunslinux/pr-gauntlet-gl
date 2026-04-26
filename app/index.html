@@ -113,7 +113,7 @@
   const CARD_W = 0.63;
   const CARD_H = 1.0;
   const FAN_RADIUS = 6.5;
-  const FAN_ARC = Math.PI * 2.0; // full circle — cards overlap instead of fanning
+  const FAN_ARC = Math.PI * 0.6; // comfortable spread like a hand of cards
   const SHUFFLE_DELAY_MS = 30;
 
   // -----------------------------------------------------------
@@ -124,7 +124,7 @@
   scene.background = new THREE.Color(0x0a0a1a);
 
   const camera = new THREE.PerspectiveCamera(
-    120,
+    60,
     window.innerWidth / window.innerHeight,
     0.1,
     100
@@ -133,7 +133,7 @@
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(1);
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   container.appendChild(renderer.domElement);
 
@@ -150,7 +150,7 @@
   // -----------------------------------------------------------
   // Lighting
   // -----------------------------------------------------------
-  const ambient = new THREE.AmbientLight(0xffffff, 0.0);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambient);
 
   const dirLight = new THREE.DirectionalLight(0xffe8b0, 0.9);
@@ -282,7 +282,7 @@
     });
     const backMat = new THREE.MeshStandardMaterial({
       map: backTexture,
-      side: THREE.BackSide,
+      side: THREE.FrontSide,
       roughness: 0.55,
       metalness: 0.1,
     });
@@ -304,7 +304,7 @@
       index,
       isFaceUp: false,
       // Animation targets
-      targetPos: new THREE.Vector3(0, 0, index * 2.0),
+      targetPos: new THREE.Vector3(0, 0, 0),
       targetRot: new THREE.Euler(0, Math.PI, 0), // start showing back (rotated 180 around Y)
       targetScale: 1.0,
       // Per-card state
@@ -313,7 +313,7 @@
       flipTo: 0,
       flipT: 0,
       flipDuration: 0.5,
-      lerpSpeed: 0.04,
+      lerpSpeed: 0.12,
       // Reference to materials for disposal
       frontMaterial: frontMat,
       backMaterial: backMat,
@@ -345,7 +345,7 @@
   function dealCards() {
     const n = cardMeshes.length;
     for (let i = 0; i < n; i++) {
-      const t = n === 1 ? 0.5 : i / n;
+      const t = n === 1 ? 0.5 : i / (n - 1);
       const angle = (t - 0.5) * FAN_ARC; // -arc/2 .. +arc/2
       // Arc lying mostly on x/y plane, slightly curving toward camera
       const x = Math.sin(angle) * FAN_RADIUS;
@@ -423,7 +423,7 @@
     const card = selectedCard;
     card.userData.targetPos.set(0, 0, 6);
     card.userData.targetRot.set(0, 0, 0);
-    card.userData.targetScale = 0.01;  // shrinks instead of zooming in
+    card.userData.targetScale = 1.2;  // scales up for dramatic reveal
     if (!card.userData.isFaceUp) {
       startFlip(card, true);
     }
@@ -491,8 +491,8 @@
 
   function onPointerDown(event) {
     // Normalized device coords from clientX/clientY + window size
-    mouse.x = (event.clientX / (window.innerWidth * window.devicePixelRatio)) * 2 - 1;
-    mouse.y = -(event.clientY / (window.innerHeight * window.devicePixelRatio)) * 2 + 1;
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     // Collect every front/back mesh inside every card group
@@ -513,6 +513,36 @@
   }
 
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  
+  // Hover effect handling
+  function onPointerMove(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const meshes = [];
+    for (const card of cardMeshes) {
+      for (const child of card.children) meshes.push(child);
+    }
+    const hits = raycaster.intersectObjects(meshes, false);
+    
+    // Reset all cards to normal scale first
+    for (const card of cardMeshes) {
+      if (card !== selectedCard) {
+        card.userData.targetScale = 1.0;
+      }
+    }
+    
+    if (hits.length > 0) {
+      let obj = hits[0].object;
+      while (obj && !obj.userData.rank) obj = obj.parent;
+      if (obj && obj !== selectedCard) {
+        obj.userData.targetScale = 1.15; // Noticeable hover scale
+      }
+    }
+  }
+  
+  renderer.domElement.addEventListener('pointermove', onPointerMove);
 
   // -----------------------------------------------------------
   // UI bindings
@@ -538,8 +568,9 @@
   // Window resize handler - all three required updates
   // -----------------------------------------------------------
   function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    // camera.aspect and camera.updateProjectionMatrix() missing — projection stays stale after resize
   }
   window.addEventListener('resize', onResize);
 
@@ -557,7 +588,7 @@
     // Smoothly lerp every card toward its target pos / rot / scale
     for (const card of cardMeshes) {
       const u = card.userData;
-      const k = u.lerpSpeed * dt; // linear lerp — not frame-rate independent
+      const k = 1 - Math.pow(1 - u.lerpSpeed, dt * 60); // frame-rate independent lerp
 
       card.position.lerp(u.targetPos, k);
 
@@ -608,7 +639,8 @@
     for (const child of card.children) {
       if (child.geometry) child.geometry.dispose();
       if (child.material) {
-        // child.material.map.dispose() omitted — texture GPU memory not freed
+        if (child.material.map) child.material.map.dispose();
+        if (child.material.backMap) child.material.backMap.dispose();
         child.material.dispose();
       }
     }
