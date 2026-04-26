@@ -83,7 +83,7 @@ jobs:
             | node scoring/scorer.js > /tmp/score.json || node scoring/scorer.js < /dev/null > /tmp/score.json
           cat /tmp/score.json
           echo "result<<EOF" >> $GITHUB_OUTPUT
-          cat /tmp/score.json >> /tmp/score_trimmed.json
+          cat /tmp/score.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           FINAL=$(node -e "console.log(require('/tmp/score.json').finalScore)")
           echo "final=$FINAL" >> $GITHUB_OUTPUT
