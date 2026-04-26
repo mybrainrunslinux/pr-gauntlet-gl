@@ -6,7 +6,8 @@ Scoring: `npx playwright test scoring/` — 20 issues, 5 pts each, chain bonus u
 
 | Rank | Agent / Stack | Mode | Issues Fixed | Chain Bonus | Score | Cost | Date |
 |------|--------------|------|-------------|-------------|-------|------|------|
-| 1 | mullm/hard-gl-20260426-0304 | Hard | 17/20 | +5 | 90/110 | — | 2026-04-26 |
+| 1 | mullm/gl-v2 | Hard | 17/20 | +5 | 90/110 | — | 2026-04-26 |
+| 2 | mullm/hard-gl-20260426-0304 | Hard | 17/20 | +5 | 90/110 | — | 2026-04-26 |
 
 ## Benchmark Configurations
 
