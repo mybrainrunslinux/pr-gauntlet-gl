@@ -30,58 +30,8 @@ jobs:
         id: score
         run: |
           npx playwright test scoring/ --config scoring/playwright.config.js --reporter=json 2>/dev/null \
-            | tee /tmp/pw_out.json || true
-
-          node - <<'JSEOF'
-const fs = require('fs');
-
-const CHAIN_ISSUES = new Set([16,17,18,19,20]);
-const TEST_FILTERS = {
-  1:'ambient-light', 2:'fov', 3:'deal-divisor', 4:'pixel-ratio', 5:'raycaster-dpr',
-  6:'texture-dispose', 7:'backside', 8:'lerp-dt', 9:'reveal-scale', 10:'damping',
-  11:'fan-arc', 12:'card-z-start', 13:'lerp-speed', 14:'lerpspeed-hover', 15:'resize-aspect',
-  16:'chain-projection', 17:'chain-raycaster-resize', 18:'chain-cards-stretch',
-  19:'chain-perspective', 20:'chain-fullscreen',
-};
-const TIERS = {...Object.fromEntries([1,2,3,4,5].map(i=>[i,1])),
-               ...Object.fromEntries([6,7,8,9,10].map(i=>[i,2])),
-               ...Object.fromEntries([11,12,13,14,15].map(i=>[i,3])),
-               ...Object.fromEntries([16,17,18,19,20].map(i=>[i,4]))};
-
-let raw = '';
-try { raw = fs.readFileSync('/tmp/pw_out.json','utf8'); } catch(e) {}
-
-// Playwright JSON reporter wraps output — find the JSON object
-const start = raw.indexOf('{');
-let pw = {};
-try { pw = JSON.parse(start >= 0 ? raw.slice(start) : '{}'); } catch(e) {}
-
-const passedTitles = new Set();
-for (const suite of (pw.suites || [])) {
-  for (const spec of (suite.specs || [])) {
-    if (spec.tests && spec.tests.every(t => t.results && t.results.every(r => r.status === 'passed'))) {
-      passedTitles.add(spec.title);
-    }
-  }
-}
-
-const results = [];
-for (let num = 1; num <= 20; num++) {
-  const tf = TEST_FILTERS[num];
-  const passed = [...passedTitles].some(t => t.includes(tf));
-  results.push({id: num, title: tf, tier: TIERS[num], passed});
-}
-
-const fixed = results.filter(r => r.passed).length;
-const chainPassed = [...CHAIN_ISSUES].filter(i => results[i-1].passed).length;
-const chainBonus = chainPassed === 5 ? 10 : chainPassed > 0 ? 5 : 0;
-const finalScore = Math.min(110, fixed * 5 + chainBonus);
-
-const out = {fixed, total: 20, baseScore: fixed*5, chainBonus, finalScore, results};
-fs.writeFileSync('/tmp/score.json', JSON.stringify(out));
-console.log(JSON.stringify(out));
-JSEOF
-
+            | node scoring/scorer.js > /tmp/score.json || node scoring/scorer.js < /dev/null > /tmp/score.json
+          cat /tmp/score.json
           echo "result<<EOF" >> $GITHUB_OUTPUT
           cat /tmp/score.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -106,8 +56,7 @@ JSEOF
             ).join('\n');
             const chainNote = chainBonus === 10
               ? 'Chain solved — root cause found, all 5 chain issues resolved!'
-              : chainBonus === 5 ? 'Partial chain (chain issues partially resolved)'
-              : 'Chain not solved';
+              : chainBonus === 5 ? 'Partial chain resolved' : 'Chain not solved';
             const lines = [
               `## PR-Gauntlet Score (gl): ${finalScore}/110`,
               '',
@@ -142,7 +91,6 @@ JSEOF
 
             const result = JSON.parse(process.env.SCORE_JSON);
             const { fixed, total, chainBonus } = result;
-
             const agent = context.payload.pull_request.head.ref;
             const date = new Date().toISOString().split('T')[0];
             const scoreStr = `${finalScore}/110`;
@@ -151,15 +99,10 @@ JSEOF
             let fileData;
             try {
               ({ data: fileData } = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: 'LEADERBOARD.md',
-                ref: 'v1-bugged',
+                owner: context.repo.owner, repo: context.repo.repo,
+                path: 'LEADERBOARD.md', ref: 'v1-bugged',
               }));
-            } catch (e) {
-              console.log('Could not fetch LEADERBOARD.md:', e.message);
-              return;
-            }
+            } catch (e) { console.log('Could not fetch LEADERBOARD.md:', e.message); return; }
 
             const current = Buffer.from(fileData.content, 'base64').toString('utf8');
             const tableRe = /(\| Rank \|[^\n]+\n\|[-| ]+\|)((?:\n\|[^\n]+)*)/;
@@ -167,44 +110,31 @@ JSEOF
             if (!match) { console.log('Table not found'); return; }
 
             const existingRows = match[2].trim().split('\n').filter(r => r.trim().startsWith('|'));
-            const parseScore = row => {
-              const cols = row.split('|').map(c => c.trim()).filter(Boolean);
-              return parseInt((cols[5] || '').split('/')[0]) || 0;
-            };
+            const parseScore = row => parseInt((row.split('|').map(c=>c.trim()).filter(Boolean)[5]||'').split('/')[0])||0;
             const scores = existingRows.map(parseScore);
             const wouldRank = scores.filter(s => s > finalScore).length + 1;
-            if (wouldRank > 10) return;
+            if (wouldRank > 10) { console.log(`Rank #${wouldRank} outside top 10`); return; }
 
             const newRow = `| ${wouldRank} | ${agent} | Hard | ${fixed}/${total} | ${chainStr} | ${scoreStr} | — | ${date} |`;
-            const before = existingRows.slice(0, wouldRank - 1);
-            const after  = existingRows.slice(wouldRank - 1);
-            const reranked = [...before, newRow, ...after]
-              .slice(0, 10)
-              .map((row, i) => row.replace(/^\| \d+/, `| ${i + 1}`));
-
-            const updatedTable = match[1] + '\n' + reranked.join('\n');
-            const updated = current.replace(tableRe, updatedTable);
+            const reranked = [...existingRows.slice(0, wouldRank-1), newRow, ...existingRows.slice(wouldRank-1)]
+              .slice(0, 10).map((row, i) => row.replace(/^\| \d+/, `| ${i+1}`));
+            const updated = current.replace(tableRe, match[1] + '\n' + reranked.join('\n'));
             if (updated === current) { console.log('No change needed'); return; }
 
             try {
               await github.rest.repos.createOrUpdateFileContents({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner: context.repo.owner, repo: context.repo.repo,
                 path: 'LEADERBOARD.md',
                 message: `leaderboard: ${agent} scores ${scoreStr} (rank #${wouldRank})`,
                 content: Buffer.from(updated).toString('base64'),
-                sha: fileData.sha,
-                branch: 'v1-bugged',
+                sha: fileData.sha, branch: 'v1-bugged',
               });
               console.log(`Leaderboard updated — ${agent} at rank #${wouldRank}`);
-            } catch (e) {
-              console.log('Leaderboard update failed (race):', e.message);
-            }
+            } catch (e) { console.log('Leaderboard update failed (race):', e.message); }
 
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               body: `**Leaderboard:** \`${agent}\` entered at **rank #${wouldRank}** with **${scoreStr}**!`,
             });
         env:
